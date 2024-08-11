@@ -8,12 +8,9 @@ import { FacialRecognitionService } from '../../services/facial-recognition.serv
   styleUrls: ['./webcam.component.css']
 })
 export class WebcamComponent implements AfterViewInit {
-  @ViewChild('videoElement', { static: false })
-  videoElement!: ElementRef<HTMLVideoElement>;
+  @ViewChild('videoElement', { static: false }) videoElement!: ElementRef<HTMLVideoElement>;
   public videoStream: MediaStream | null = null;
   streamSubscription: any;
-
-  @ViewChild('videoElement', { static: false }) videoElementRef!: ElementRef<HTMLVideoElement>;
 
   constructor(
     private webcamService: WebcamService,
@@ -22,29 +19,44 @@ export class WebcamComponent implements AfterViewInit {
 
   async ngAfterViewInit(): Promise<void> {
     const stream = await this.webcamService.initVideoStream().toPromise();
-    
+  
     if (stream) {
       this.videoStream = stream;
-      await this.facialRecognitionService.loadModel();
-      this.detectFaces();
+      this.videoElement.nativeElement.srcObject = stream;
+  
+      // Wait for video to be ready
+      this.videoElement.nativeElement.onloadedmetadata = async () => {
+        await this.facialRecognitionService.loadModel();
+        this.setupCanvas(); // Add this line to initialize canvas size
+        this.detectFaces();
+      };
     } else {
-      this.videoStream = null; // Explicitly set to null if the stream is undefined
+      this.videoStream = null;
       console.error('Failed to initialize video stream');
     }
   }
+  
+  setupCanvas(): void {
+    const video = this.videoElement.nativeElement;
+    const canvas = document.getElementById('overlay') as HTMLCanvasElement;
+  
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }
+  
   async startStream(): Promise<void> {
     this.streamSubscription = (await this.webcamService.initVideoStream()).subscribe(stream => {
       this.videoStream = stream;
-      if (this.videoElementRef && this.videoElementRef.nativeElement) {
-        this.videoElementRef.nativeElement.srcObject = stream;
+      if (this.videoElement && this.videoElement.nativeElement) {
+        this.videoElement.nativeElement.srcObject = stream;
       }
     });
   }
 
   stopStream(): void {
     this.webcamService.stopVideoStream();
-    if (this.videoElementRef && this.videoElementRef.nativeElement) {
-      this.videoElementRef.nativeElement.srcObject = null;
+    if (this.videoElement && this.videoElement.nativeElement) {
+      this.videoElement.nativeElement.srcObject = null;
     }
   }
 
@@ -61,9 +73,17 @@ export class WebcamComponent implements AfterViewInit {
     const canvas = document.getElementById('overlay') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
   
-    if (ctx) {  // Check if ctx is not null
+    if (ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
   
+      // Draw a test rectangle
+      ctx.beginPath();
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 2;
+      ctx.rect(50, 50, 100, 100);
+      ctx.stroke();
+  
+      // Now draw detected faces
       faces.forEach((face: any) => {
         const start = face.topLeft;
         const end = face.bottomRight;
@@ -84,5 +104,6 @@ export class WebcamComponent implements AfterViewInit {
       console.error('Unable to get canvas context');
     }
   }
+  
   
 }
