@@ -1,0 +1,16 @@
+.webcam-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+  
+video {
+    width: 100%;
+    max-width: 600px;
+    border: 2px solid black;
+}
+  
+button {
+    margin: 10px;
+}
+  
