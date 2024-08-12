@@ -93,8 +93,8 @@ export class WebcamComponent implements OnInit, OnDestroy, AfterViewInit {
         // Calculate adjusted dimensions
         const boxWidth = (bottomRight[0] - topLeft[0]) * scaleX;
         const boxHeight = (bottomRight[1] - topLeft[1]) * scaleY;
-        const marginWidth = 70;
-        const marginHeight = -20; // Margin to make box narrower
+        const marginWidth = boxWidth/1.75;
+        const marginHeight = 0; // Margin to make box narrower
         const adjustedWidth = boxWidth - marginWidth;
         const adjustedHeight = boxHeight - marginHeight;
   
