@@ -1,29 +1,28 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import * as blazeface from '@tensorflow-models/blazeface';
+import * as tf from '@tensorflow/tfjs';
 
 @Injectable({
   providedIn: 'root'
 })
 export class WebcamService {
   private videoElement: HTMLVideoElement | null = null;
-  private streamSubject = new BehaviorSubject<MediaStream | null>(null);
+  private model: blazeface.BlazeFaceModel | null = null;
 
   constructor() { }
 
-  public initVideoStream(): Observable<MediaStream | null> {
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        this.videoElement = document.createElement('video');
-        this.videoElement.srcObject = stream;
-        this.videoElement.autoplay = true;
-        this.streamSubject.next(stream);
-      })
-      .catch(error => {
-        console.error('Error accessing webcam: ', error);
-        this.streamSubject.next(null);
-      });
-
-    return this.streamSubject.asObservable();
+  public async initVideoStream(): Promise<MediaStream | null> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      this.videoElement = document.createElement('video');
+      this.videoElement.srcObject = stream;
+      this.videoElement.autoplay = true;
+      this.videoElement.playsInline = true;  // For iOS Safari
+      return stream;
+    } catch (error) {
+      console.error('Error accessing webcam: ', error);
+      return null;
+    }
   }
 
   public stopVideoStream(): void {
@@ -31,7 +30,19 @@ export class WebcamService {
       const stream = this.videoElement.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
       this.videoElement.srcObject = null;
-      this.streamSubject.next(null);
     }
+  }
+
+  public async loadModel(): Promise<void> {
+    this.model = await blazeface.load();
+    console.log('BlazeFace model loaded');
+  }
+
+  public async detectFaces(): Promise<blazeface.NormalizedFace[]> {
+    if (this.model && this.videoElement) {
+      const predictions = await this.model.estimateFaces(this.videoElement, false);
+      return predictions;
+    }
+    return [];
   }
 }

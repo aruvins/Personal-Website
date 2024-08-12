@@ -1,109 +1,132 @@
-import { Component, AfterViewInit, ViewChild, ElementRef } from '@angular/core';
+import * as blazeface from '@tensorflow-models/blazeface';
+import * as tf from '@tensorflow/tfjs';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { WebcamService } from '../../services/webcam/webcam.service';
-import { FacialRecognitionService } from '../../services/facial-recognition.service';
 
 @Component({
   selector: 'app-webcam',
   templateUrl: './webcam.component.html',
   styleUrls: ['./webcam.component.css']
 })
-export class WebcamComponent implements AfterViewInit {
-  @ViewChild('videoElement', { static: false }) videoElement!: ElementRef<HTMLVideoElement>;
+export class WebcamComponent implements OnInit, OnDestroy, AfterViewInit {
+  @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   public videoStream: MediaStream | null = null;
-  streamSubscription: any;
+  public faces: blazeface.NormalizedFace[] = [];
+  public isVideoRunning: boolean = false;
+  private shouldDetectFaces: boolean = false;
 
-  constructor(
-    private webcamService: WebcamService,
-    private facialRecognitionService: FacialRecognitionService
-  ) { }
+  constructor(private webcamService: WebcamService) { }
 
-  async ngAfterViewInit(): Promise<void> {
-    const stream = await this.webcamService.initVideoStream().toPromise();
-  
-    if (stream) {
-      this.videoStream = stream;
-      this.videoElement.nativeElement.srcObject = stream;
-  
-      // Wait for video to be ready
-      this.videoElement.nativeElement.onloadedmetadata = async () => {
-        await this.facialRecognitionService.loadModel();
-        this.setupCanvas(); // Add this line to initialize canvas size
-        this.detectFaces();
-      };
+  async ngOnInit(): Promise<void> {
+    this.videoStream = await this.webcamService.initVideoStream();
+    // await this.webcamService.loadModel();
+    // this.detectFaces();
+  }
+
+  ngAfterViewInit(): void {
+    this.initVideoElement();
+  }
+
+  ngOnDestroy(): void {
+    this.stopVideo();
+  }
+
+  public async toggleVideo(): Promise<void> {
+    if (this.isVideoRunning) {
+      this.stopVideo();
     } else {
-      this.videoStream = null;
-      console.error('Failed to initialize video stream');
+      await this.startVideo();
     }
   }
-  
-  setupCanvas(): void {
-    const video = this.videoElement.nativeElement;
-    const canvas = document.getElementById('overlay') as HTMLCanvasElement;
-  
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-  }
-  
-  async startStream(): Promise<void> {
-    this.streamSubscription = (await this.webcamService.initVideoStream()).subscribe(stream => {
-      this.videoStream = stream;
-      if (this.videoElement && this.videoElement.nativeElement) {
-        this.videoElement.nativeElement.srcObject = stream;
-      }
-    });
+
+  private async startVideo(): Promise<void> {
+    this.videoStream = await this.webcamService.initVideoStream();
+    await this.webcamService.loadModel();
+    if (this.videoStream && this.videoElement) {
+      this.videoElement.nativeElement.srcObject = this.videoStream;
+      this.videoElement.nativeElement.play();
+    }
+    this.isVideoRunning = true;
+    this.shouldDetectFaces = true;
+    this.detectFaces();
   }
 
-  stopStream(): void {
-    this.webcamService.stopVideoStream();
-    if (this.videoElement && this.videoElement.nativeElement) {
+  private stopVideo(): void {
+    // this.shouldDetectFaces = false; // Stop face detection
+    if (this.videoStream) {
+      this.videoStream.getTracks().forEach(track => track.stop());
+    }
+    this.isVideoRunning = false;
+    // this.faces = [];
+
+    if (this.videoElement) {
       this.videoElement.nativeElement.srcObject = null;
     }
   }
 
-  async detectFaces(): Promise<void> {
-    const video = this.videoElement.nativeElement;
-    if (video.readyState === 4) {
-      const faces = await this.facialRecognitionService.detectFaces(video);
-      this.drawFaces(faces);
+  private async detectFaces(): Promise<void> {
+    while (this.videoStream) {
+      this.faces = await this.webcamService.detectFaces();
+      this.drawFaces();
+      await tf.nextFrame();
     }
-    requestAnimationFrame(() => this.detectFaces());
+    this.updateCanvasSize();
   }
 
-  drawFaces(faces: any): void {
+  private drawFaces(): void {
     const canvas = document.getElementById('overlay') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
-  
     if (ctx) {
+      const videoElement = this.videoElement.nativeElement;
+      const videoWidth = videoElement.videoWidth;
+      const videoHeight = videoElement.videoHeight;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-      // Draw a test rectangle
-      ctx.beginPath();
-      ctx.strokeStyle = 'red';
-      ctx.lineWidth = 2;
-      ctx.rect(50, 50, 100, 100);
-      ctx.stroke();
+      this.faces.forEach(face => {
+        const topLeft = face.topLeft as [number, number];
+        const bottomRight = face.bottomRight as [number, number];
   
-      // Now draw detected faces
-      faces.forEach((face: any) => {
-        const start = face.topLeft;
-        const end = face.bottomRight;
-        const size = [end[0] - start[0], end[1] - start[1]];
+        // Scale coordinates to match canvas size
+        const scaleX = canvas.width / videoWidth;
+        const scaleY = canvas.height / videoHeight;
+  
+        // Calculate adjusted dimensions
+        const boxWidth = (bottomRight[0] - topLeft[0]) * scaleX;
+        const boxHeight = (bottomRight[1] - topLeft[1]) * scaleY;
+        const marginWidth = 70;
+        const marginHeight = -20; // Margin to make box narrower
+        const adjustedWidth = boxWidth - marginWidth;
+        const adjustedHeight = boxHeight - marginHeight;
   
         ctx.beginPath();
-        ctx.strokeStyle = 'red';
         ctx.lineWidth = 2;
-        ctx.rect(start[0], start[1], size[0], size[1]);
+        ctx.strokeStyle = 'blue';
+        ctx.rect(
+          topLeft[0] * scaleX + marginWidth / 2,
+          topLeft[1] * scaleY + marginHeight / 2,
+          adjustedWidth,
+          adjustedHeight
+        );
         ctx.stroke();
-  
-        // Display additional information (if any)
-        ctx.font = '18px Arial';
-        ctx.fillStyle = 'red';
-        ctx.fillText('Face', start[0], start[1] - 10);
       });
-    } else {
-      console.error('Unable to get canvas context');
     }
   }
   
+
+
+  private updateCanvasSize(): void {
+  const canvas = document.getElementById('overlay') as HTMLCanvasElement;
+  if (canvas && this.videoElement) {
+    canvas.width = this.videoElement.nativeElement.videoWidth;
+    canvas.height = this.videoElement.nativeElement.videoHeight;
+  }
+}
+
   
+  private initVideoElement(): void {
+    if (this.videoElement) {
+      this.videoElement.nativeElement.autoplay = true;
+      this.videoElement.nativeElement.playsInline = true;
+    }
+  }
 }
