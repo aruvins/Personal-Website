@@ -15,12 +15,10 @@ export class WebcamComponent implements OnInit, OnDestroy, AfterViewInit {
   public isVideoRunning: boolean = false;
   private shouldDetectFaces: boolean = false;
 
-  constructor(private webcamService: WebcamService) { }
+  constructor(private webcamService: WebcamService) {}
 
   async ngOnInit(): Promise<void> {
-    this.videoStream = await this.webcamService.initVideoStream();
-    // await this.webcamService.loadModel();
-    // this.detectFaces();
+    // Removed initialization from here to place it in startVideo()
   }
 
   ngAfterViewInit(): void {
@@ -42,22 +40,26 @@ export class WebcamComponent implements OnInit, OnDestroy, AfterViewInit {
   private async startVideo(): Promise<void> {
     this.videoStream = await this.webcamService.initVideoStream();
     await this.webcamService.loadModel();
+    
     if (this.videoStream && this.videoElement) {
       this.videoElement.nativeElement.srcObject = this.videoStream;
       this.videoElement.nativeElement.play();
     }
+    
     this.isVideoRunning = true;
     this.shouldDetectFaces = true;
     this.detectFaces();
   }
 
   private stopVideo(): void {
-    // this.shouldDetectFaces = false; // Stop face detection
+    this.shouldDetectFaces = false; // Stop face detection
+
     if (this.videoStream) {
       this.videoStream.getTracks().forEach(track => track.stop());
     }
+
     this.isVideoRunning = false;
-    // this.faces = [];
+    this.faces = [];
 
     if (this.videoElement) {
       this.videoElement.nativeElement.srcObject = null;
@@ -65,21 +67,22 @@ export class WebcamComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private async detectFaces(): Promise<void> {
-    while (this.videoStream) {
+    while (this.shouldDetectFaces) { // Changed to use shouldDetectFaces
       this.faces = await this.webcamService.detectFaces();
       this.drawFaces();
       await tf.nextFrame();
     }
-    this.updateCanvasSize();
   }
 
   private drawFaces(): void {
     const canvas = document.getElementById('overlay') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
+    
     if (ctx) {
       const videoElement = this.videoElement.nativeElement;
       const videoWidth = videoElement.videoWidth;
       const videoHeight = videoElement.videoHeight;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
   
       this.faces.forEach(face => {
@@ -93,7 +96,7 @@ export class WebcamComponent implements OnInit, OnDestroy, AfterViewInit {
         // Calculate adjusted dimensions
         const boxWidth = (bottomRight[0] - topLeft[0]) * scaleX;
         const boxHeight = (bottomRight[1] - topLeft[1]) * scaleY;
-        const marginWidth = boxWidth/1.75;
+        const marginWidth = boxWidth / 1.75;
         const marginHeight = 0; // Margin to make box narrower
         const adjustedWidth = boxWidth - marginWidth;
         const adjustedHeight = boxHeight - marginHeight;
@@ -111,18 +114,15 @@ export class WebcamComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
   }
-  
-
 
   private updateCanvasSize(): void {
-  const canvas = document.getElementById('overlay') as HTMLCanvasElement;
-  if (canvas && this.videoElement) {
-    canvas.width = this.videoElement.nativeElement.videoWidth;
-    canvas.height = this.videoElement.nativeElement.videoHeight;
+    const canvas = document.getElementById('overlay') as HTMLCanvasElement;
+    if (canvas && this.videoElement) {
+      canvas.width = this.videoElement.nativeElement.videoWidth;
+      canvas.height = this.videoElement.nativeElement.videoHeight;
+    }
   }
-}
 
-  
   private initVideoElement(): void {
     if (this.videoElement) {
       this.videoElement.nativeElement.autoplay = true;
