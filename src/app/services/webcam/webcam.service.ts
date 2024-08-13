@@ -17,7 +17,7 @@ export class WebcamService {
       this.videoElement = document.createElement('video');
       this.videoElement.srcObject = stream;
       this.videoElement.autoplay = true;
-      this.videoElement.playsInline = true;  // For iOS Safari
+      this.videoElement.playsInline = true;
       return stream;
     } catch (error) {
       console.error('Error accessing webcam: ', error);
@@ -34,15 +34,25 @@ export class WebcamService {
   }
 
   public async loadModel(): Promise<void> {
-    this.model = await blazeface.load();
-    console.log('BlazeFace model loaded');
+    try {
+      this.model = await blazeface.load();
+      console.log('BlazeFace model loaded');
+    } catch (error) {
+      console.error('Error loading BlazeFace model: ', error);
+    }
   }
 
   public async detectFaces(): Promise<blazeface.NormalizedFace[]> {
     if (this.model && this.videoElement) {
-      const predictions = await this.model.estimateFaces(this.videoElement, false);
-      return predictions;
+      try {
+        const predictions = await this.model.estimateFaces(this.videoElement, false);
+        return predictions;
+      } catch (error) {
+        console.error('Error detecting faces: ', error);
+        return [];
+      }
     }
+    console.warn('BlazeFace model or video element not available');
     return [];
   }
 }
