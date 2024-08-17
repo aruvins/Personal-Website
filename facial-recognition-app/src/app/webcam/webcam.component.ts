@@ -11,6 +11,8 @@ export class WebcamComponent implements AfterViewInit {
 
   @ViewChild('video') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('canvas') canvasElement!: ElementRef<HTMLCanvasElement>;
+  private videoStream: MediaStream | null = null;
+  public isVideoRunning: boolean = false;
 
   constructor() {}
 
@@ -25,44 +27,102 @@ export class WebcamComponent implements AfterViewInit {
     this.startVideo();
   }
 
-  startVideo() {
-    navigator.mediaDevices.getUserMedia({ video: {} })
-      .then(stream => {
-        const video = this.videoElement.nativeElement;
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          video.play();
-          this.onPlay();
-        };
-      })
-      .catch(err => console.error('Error accessing webcam: ', err));
+  async toggleVideo() {
+    if (this.isVideoRunning) {
+      this.stopVideo();
+    } else {
+      await this.startVideo();
+      this.isVideoRunning = true;
+      this.onPlay();
+    }
   }
 
+
+  stopVideo() {
+    if (this.videoStream) {
+      this.videoStream.getTracks().forEach(track => track.stop());
+      this.videoElement.nativeElement.srcObject = null;
+      this.isVideoRunning = false;
+    }
+  }
+
+  setupCanvas(video: HTMLVideoElement) {
+    const canvas = this.canvasElement.nativeElement;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }
+
+  async startVideo() {
+    try {
+      this.videoStream = await navigator.mediaDevices.getUserMedia({ video: {} });
+      const video = this.videoElement.nativeElement;
+      video.srcObject = this.videoStream;
+      video.onloadedmetadata = () => {
+        video.play();
+        // Set canvas size based on video size
+        const canvas = this.canvasElement.nativeElement;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      };
+    } catch (err) {
+      console.error('Error accessing webcam: ', err);
+    }
+  }
+  
   async onPlay() {
     const video = this.videoElement.nativeElement;
     const canvas = this.canvasElement.nativeElement;
-
-    const displaySize = { width: video.width, height: video.height };
-    faceapi.matchDimensions(canvas, displaySize);
-
-    setInterval(async () => {
-      const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks().withFaceDescriptors().withFaceExpressions().withAgeAndGender();
-
-      const resizedDetections = faceapi.resizeResults(detections, displaySize);
-      canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
-      faceapi.draw.drawDetections(canvas, resizedDetections);
-      faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
-      faceapi.draw.drawFaceExpressions(canvas, resizedDetections);
-
-      resizedDetections.forEach((detection: { detection?: any; age?: any; gender?: any; }) => {
-        const { age, gender } = detection;
-        const box = detection.detection.box;
-        const drawBox = new faceapi.draw.DrawBox(box, {
-          label: `${Math.round(age)} years old ${gender}`
-        });
-        drawBox.draw(canvas);
-      });
-    }, 100);
+  
+    // Wait for the video metadata to be loaded
+    video.onloadedmetadata = () => {
+      const displaySize = { width: video.videoWidth, height: video.videoHeight };
+      
+      // Set canvas dimensions
+      canvas.width = displaySize.width;
+      canvas.height = displaySize.height;
+  
+      // Match dimensions
+      faceapi.matchDimensions(canvas, displaySize);
+  
+      // Process video frames
+      setInterval(async () => {
+        if (this.isVideoRunning) {
+          // Ensure dimensions are valid before proceeding
+          if (displaySize.width > 0 && displaySize.height > 0) {
+            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+              .withFaceLandmarks()
+              .withFaceDescriptors()
+              .withFaceExpressions()
+              .withAgeAndGender();
+  
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            console.log('Resized detections dimensions:', resizedDetections);
+  
+            // Clear the canvas before drawing
+            canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+  
+            // Draw results
+            faceapi.draw.drawDetections(canvas, resizedDetections);
+            faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+            faceapi.draw.drawFaceExpressions(canvas, resizedDetections);
+  
+            // Draw bounding boxes with age and gender information
+            resizedDetections.forEach((detection: any) => {
+              const box = detection.detection.box;
+              const drawBox = new faceapi.draw.DrawBox(box, { label: `${Math.round(detection.age)} year old ${detection.gender}` });
+              drawBox.draw(canvas);
+            });
+          } else {
+            console.warn('Invalid video dimensions:', displaySize);
+          }
+        }
+      }, 100);
+    };
+  
+    // Handle any potential errors in video loading
+    video.onerror = (err) => {
+      console.error('Video error:', err);
+    };
   }
+  
 }
