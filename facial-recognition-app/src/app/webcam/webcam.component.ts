@@ -42,8 +42,7 @@ export class WebcamComponent implements AfterViewInit {
       this.videoStream = null;
       this.videoElement.nativeElement.srcObject = null;
       this.isVideoRunning = false;
-      
-      // Clear the canvas when stopping the video
+
       const canvas = this.canvasElement.nativeElement;
       const context = canvas.getContext('2d');
       if (context) {
