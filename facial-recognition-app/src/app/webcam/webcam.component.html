@@ -1,0 +1,8 @@
+<div class="container">
+    <div class="video-container">
+        <video #video autoplay></video>
+        <canvas #canvas></canvas>
+    </div>
+    <button (click)="toggleVideo()">{{ isVideoRunning ? 'Stop' : 'Start' }} Video</button>      
+</div>
+  
