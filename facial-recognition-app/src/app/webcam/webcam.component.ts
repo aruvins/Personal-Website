@@ -24,7 +24,6 @@ export class WebcamComponent implements AfterViewInit {
     await faceapi.nets.faceRecognitionNet.loadFromUri('/assets/models');
     await faceapi.nets.faceExpressionNet.loadFromUri('/assets/models');
     await faceapi.nets.ageGenderNet.loadFromUri('/assets/models');
-    this.startVideo();
   }
 
   async toggleVideo() {
@@ -37,12 +36,19 @@ export class WebcamComponent implements AfterViewInit {
     }
   }
 
-
   stopVideo() {
     if (this.videoStream) {
       this.videoStream.getTracks().forEach(track => track.stop());
+      this.videoStream = null;
       this.videoElement.nativeElement.srcObject = null;
       this.isVideoRunning = false;
+      
+      // Clear the canvas when stopping the video
+      const canvas = this.canvasElement.nativeElement;
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+      }
     }
   }
 
@@ -57,33 +63,32 @@ export class WebcamComponent implements AfterViewInit {
       this.videoStream = await navigator.mediaDevices.getUserMedia({ video: {} });
       const video = this.videoElement.nativeElement;
       video.srcObject = this.videoStream;
+
+      // Ensure canvas is setup correctly when video metadata is loaded
       video.onloadedmetadata = () => {
         video.play();
-        // Set canvas size based on video size
-        const canvas = this.canvasElement.nativeElement;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        this.setupCanvas(video);
       };
     } catch (err) {
       console.error('Error accessing webcam: ', err);
     }
   }
-  
+
   async onPlay() {
     const video = this.videoElement.nativeElement;
     const canvas = this.canvasElement.nativeElement;
-  
+
     // Wait for the video metadata to be loaded
     video.onloadedmetadata = () => {
       const displaySize = { width: video.videoWidth, height: video.videoHeight };
-      
+
       // Set canvas dimensions
       canvas.width = displaySize.width;
       canvas.height = displaySize.height;
-  
+
       // Match dimensions
       faceapi.matchDimensions(canvas, displaySize);
-  
+
       // Process video frames
       setInterval(async () => {
         if (this.isVideoRunning) {
@@ -94,18 +99,20 @@ export class WebcamComponent implements AfterViewInit {
               .withFaceDescriptors()
               .withFaceExpressions()
               .withAgeAndGender();
-  
+
             const resizedDetections = faceapi.resizeResults(detections, displaySize);
-            console.log('Resized detections dimensions:', resizedDetections);
-  
+
             // Clear the canvas before drawing
-            canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
-  
+            const context = canvas.getContext('2d');
+            if (context) {
+              context.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
             // Draw results
             faceapi.draw.drawDetections(canvas, resizedDetections);
             faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
             faceapi.draw.drawFaceExpressions(canvas, resizedDetections);
-  
+
             // Draw bounding boxes with age and gender information
             resizedDetections.forEach((detection: any) => {
               const box = detection.detection.box;
@@ -118,11 +125,10 @@ export class WebcamComponent implements AfterViewInit {
         }
       }, 100);
     };
-  
+
     // Handle any potential errors in video loading
     video.onerror = (err) => {
       console.error('Video error:', err);
     };
   }
-  
 }
