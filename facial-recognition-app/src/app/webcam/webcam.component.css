@@ -1,0 +1,13 @@
+.webcam-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+video, canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+  
