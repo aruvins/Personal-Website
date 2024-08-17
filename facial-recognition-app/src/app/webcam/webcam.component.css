@@ -1,8 +1,7 @@
 .webcam-container {
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  display: block;
+  width: 100%;
+  height: auto;
   }
   
 video, canvas {
