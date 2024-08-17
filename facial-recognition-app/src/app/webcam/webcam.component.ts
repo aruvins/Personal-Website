@@ -15,10 +15,8 @@ export class WebcamComponent implements AfterViewInit {
   constructor() {}
 
   async ngAfterViewInit() {
-    // Set TensorFlow.js backend if necessary
     await tf.setBackend('webgl');
 
-    // Load face-api models
     await faceapi.nets.tinyFaceDetector.loadFromUri('/assets/models');
     await faceapi.nets.faceLandmark68Net.loadFromUri('/assets/models');
     await faceapi.nets.faceRecognitionNet.loadFromUri('/assets/models');
