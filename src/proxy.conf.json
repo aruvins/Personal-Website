@@ -1,0 +1,11 @@
+{
+    "/tfhub": {
+      "target": "https://tfhub.dev",
+      "secure": true,
+      "changeOrigin": true,
+      "pathRewrite": {
+        "^/tfhub": ""
+      }
+    }
+}
+  
